@@ -1,0 +1,20 @@
+services:
+  # Servicio web para SunPich API
+  - type: web
+    name: sunpich-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=4 --timeout=120 app:app
+    envVars:
+      - key: OLLAMA_URL
+        value: https://evaenespanol.loca.lt/api/chat
+      - key: MODEL_NAME
+        value: llama3:8b
+      - key: TTS_VOICE
+        value: es-ES-AlvaroNeural
+      - key: TTS_RATE
+        value: +0%
+      - key: TTS_VOLUME
+        value: +0%
+    healthCheckPath: /api/health
+    autoDeploy: true
