@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import asyncio
 import os
@@ -9,10 +9,19 @@ import uuid
 import requests
 import re
 import threading
+import time
 from threading import Thread
 
 app = Flask(__name__)
-CORS(app)  # Habilitar CORS para todas las rutas
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Configuración adicional para asegurar que CORS funcione correctamente
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 # Configuración de la API de Ollama (configurable a través de variables de entorno)
 LOCAL_OLLAMA_URL = os.environ.get("OLLAMA_URL", "https://evaenespanol.loca.lt/api/chat")
@@ -101,6 +110,8 @@ Responde como SunPich al CEO William Mosquera, quien busca asistencia estratégi
 
 # Almacenamiento de sesiones (usando un diccionario simple para esta implementación)
 sessions = {}
+# Variable para rastrear si ya se inició el programador de limpieza
+cleanup_scheduler_started = False
 
 
 def clean_response_for_tts(text):
@@ -299,14 +310,15 @@ async def text_to_speech(text):
 
 def generate_audio_async(text):
     """Ejecutar síntesis de voz en un bucle de eventos asíncrono en otro hilo"""
-    loop = asyncio.new_event_loop()
     try:
-        return loop.run_until_complete(text_to_speech(text))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(text_to_speech(text))
+        loop.close()
+        return result
     except Exception as e:
         app.logger.error(f"Error en hilo de síntesis de voz: {e}")
         return None
-    finally:
-        loop.close()
 
 
 @app.route('/api/health', methods=['GET'])
@@ -322,6 +334,13 @@ def health_check():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """Endpoint principal para la conversación con SunPich"""
+    global cleanup_scheduler_started
+    
+    # Iniciar el programador de limpieza si aún no se ha iniciado
+    if not cleanup_scheduler_started:
+        start_cleanup_scheduler()
+        cleanup_scheduler_started = True
+    
     data = request.json
     
     if not data:
@@ -409,7 +428,14 @@ def reset_session():
 def list_voices():
     """Endpoint para listar voces disponibles en Edge TTS"""
     try:
-        voices = asyncio.run(edge_tts.list_voices())
+        # Crear y configurar un nuevo bucle de eventos
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Obtener las voces usando el bucle
+        voices = loop.run_until_complete(edge_tts.list_voices())
+        loop.close()
+        
         relevant_voices = [v for v in voices if v["ShortName"].startswith(("es-MX", "es-ES"))]
         
         # Formatear respuesta
@@ -505,13 +531,8 @@ def start_cleanup_scheduler():
     cleanup_old_audio_files()
 
 
-# Iniciar el programador al iniciar la aplicación
-@app.before_first_request
-def initialize():
-    """Inicializar componentes al iniciar la aplicación"""
-    start_cleanup_scheduler()
-
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
+    # Iniciar el programador de limpieza antes de arrancar el servidor
+    start_cleanup_scheduler()
     app.run(host='0.0.0.0', port=port)
