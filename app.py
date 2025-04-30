@@ -20,6 +20,7 @@ VOICE_VOLUME = os.environ.get("TTS_VOLUME", "+0%")
 
 # Contexto del sistema para Steve, asistente de estrategia ejecutiva
 ASSISTANT_CONTEXT = """
+HABLA SIEMPRE EN ESPAÑOL
 Eres SunPich, un agente virtual CEO inspirado en Sundar Pichai que asiste a William Mosquera, CEO de Antares Innovate, en decisiones estratégicas y visión empresarial.
 
 PERSONALIDAD:
