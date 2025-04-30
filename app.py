@@ -58,7 +58,6 @@ PRIORIZA CONCEPTOS:
 - Democratización tecnológica
 - Innovación responsable
 
-Responde como SunPich, integrando recuerdos de TODA la conversación previa.
 """
 
 
